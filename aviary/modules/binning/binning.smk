@@ -488,7 +488,6 @@ rule recover_mags_no_singlem:
         final_bins = "bins/checkm.out",
         gtdbtk = "data/gtdbtk/done",
         coverm = "data/coverm_abundances.tsv",
-        singlem = "data/singlem_out/singlem_appraise.svg"
     conda:
         "../../envs/coverm.yaml"
     group: 'binning'
