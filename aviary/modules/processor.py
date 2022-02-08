@@ -262,10 +262,10 @@ class Processor:
         self._validate_config()
 
         cores = max(int(self.threads), cores)
-        # "{jobs}--rerun-incomplete "
+
         cmd = (
             "snakemake --snakefile {snakefile} --directory {working_dir} "
-            "{jobs} "
+            "{jobs}--rerun-incomplete "
             "--configfile '{config_file}' --nolock"
             " {profile} {conda_frontend} --use-conda {conda_prefix}"
             " {dryrun}{notemp}{args}"
