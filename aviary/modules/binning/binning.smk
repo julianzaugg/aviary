@@ -495,7 +495,6 @@ rule recover_mags_no_singlem:
     output:
         bins = "bins/done",
         taxonomy = "taxonomy/done",
-        quality = 'bins/checkm.out'
     threads:
         config["max_threads"]
     shell:
