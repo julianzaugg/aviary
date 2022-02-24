@@ -11,4 +11,4 @@ dependencies:
   - checkm-genome
   - biopython
   - pip:
-     - git - https://github.com/rhysnewell/pynndescent.git@10a3365cd5997ede55060d5ee7fd024704d87902
+     - "git+https://github.com/rhysnewell/pynndescent.git@remove_parallel_cache"
