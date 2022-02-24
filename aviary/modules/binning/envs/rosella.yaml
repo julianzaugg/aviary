@@ -10,5 +10,3 @@ dependencies:
   - pebble
   - checkm-genome
   - biopython
-  - pip:
-     - "git+https://github.com/rhysnewell/pynndescent.git@remove_parallel_cache"
