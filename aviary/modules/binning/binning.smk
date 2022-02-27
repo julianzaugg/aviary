@@ -540,7 +540,6 @@ rule recover_mags:
     group: 'binning'
     output:
         bins = "bins/done",
-        taxonomy = "taxonomy/done",
         diversity = 'diversity/done'
     threads:
         config["max_threads"]
@@ -552,6 +551,29 @@ rule recover_mags:
         "ln -s data/singlem_out/ diversity/; "
         "touch bins/done; "
         "touch diversity/done; "
+
+rule recover_mags_no_singlem:
+    input:
+        final_bins = "bins/checkm.out",
+        gtdbtk_done= "data/gtdbtk/done",
+        coverm = "data/coverm_abundances.tsv",
+    conda:
+        "../../envs/coverm.yaml"
+    group: 'binning'
+    output:
+        bins = "bins/done",
+    threads:
+        config["max_threads"]
+    shell:
+        """
+        # Use --precluster-method finch so dashing-related install problems are avoided i.e. https://github.com/dnbaker/dashing/issues/41
+        cd bins
+        ln -s ../data/coverm_abundances.tsv ./
+        ln -s ../data/coverm.cov ./
+        cd ../
+        # cp data/*_bins* bins/
+        touch bins/done
+        """
 
 # Special rule to help out with a buggy output
 rule dereplicate_and_get_abundances_paired:
