@@ -532,7 +532,7 @@ rule singlem_appraise:
 rule recover_mags:
     input:
         final_bins = "bins/checkm.out",
-        gtdbtk = "data/gtdbtk/done",
+        # gtdbtk = "data/gtdbtk/done",
         coverm = "data/coverm_abundances.tsv",
         singlem = "data/singlem_out/singlem_appraise.svg"
     conda:
@@ -545,53 +545,13 @@ rule recover_mags:
     threads:
         config["max_threads"]
     shell:
-        # Use --precluster-method finch so dashing-related install problems are avoided i.e. https://github.com/dnbaker/dashing/issues/41
-        """
-        cd bins/
-        ln -s ../data/coverm_abundances.tsv ./
-        ln -s ../data/coverm.cov ./
-        cd ../
-        # "mv data/*_bins* bins/
-        mkdir taxonomy
-        mkdir diversity
-        cd taxonomy
-        ln -s ../data/gtdbtk ./
-        cd ../diversity
-        ln -s ../data/singlem_out ./
-        cd ../
-        touch bins/done
-        touch diversity/done
-        touch taxonomy/done
-        """
-
-rule recover_mags_no_singlem:
-    input:
-        final_bins = "bins/checkm.out",
-        gtdbtk = "data/gtdbtk/done",
-        coverm = "data/coverm_abundances.tsv",
-    conda:
-        "../../envs/coverm.yaml"
-    group: 'binning'
-    output:
-        bins = "bins/done",
-        taxonomy = "taxonomy/done",
-    threads:
-        config["max_threads"]
-    shell:
-        """
-        # Use --precluster-method finch so dashing-related install problems are avoided i.e. https://github.com/dnbaker/dashing/issues/41
-        cd bins
-        ln -s ../data/coverm_abundances.tsv ./
-        ln -s ../data/coverm.cov ./
-        cd ../
-        # cp data/*_bins* bins/
-        mkdir taxonomy
-        cd taxonomy
-        ln -s ../data/gtdbtk ./
-        cd ../
-        touch bins/done
-        touch taxonomy/done
-        """
+        "cd bins/; "
+        "ln -s ../data/coverm_abundances.tsv ./; "
+        "ln -s ../data/coverm.cov ./; "
+        "cd ../; "
+        "ln -s data/singlem_out/ diversity/; "
+        "touch bins/done; "
+        "touch diversity/done; "
 
 # Special rule to help out with a buggy output
 rule dereplicate_and_get_abundances_paired:
