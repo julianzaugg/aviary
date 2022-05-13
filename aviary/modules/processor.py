@@ -95,12 +95,24 @@ class Processor:
             self.assembly = 'none'
 
         try:
-
             self.reference_filter = os.path.abspath(args.reference_filter) if args.reference_filter != 'none' else 'none'
-            self.gold_standard = os.path.abspath(args.gold_standard) if args.gold_standard != 'none' else 'none'
+            if args.gold_standard is not None:
+                self.gold_standard = [os.path.abspath(p) for p in args.gold_standard]
+            else:
+                self.gold_standard = 'none'
         except AttributeError:
             self.reference_filter = 'none'
             self.gold_standard = 'none'
+
+        try:
+            self.gsa_mappings = args.gsa_mappings
+        except AttributeError:
+            self.gsa_mappings = 'none'
+
+        try:
+            self.semibin_model = args.semibin_model
+        except AttributeError:
+            self.semibin_model = 'global'
 
         try:
             self.longreads = args.longreads
@@ -129,6 +141,9 @@ class Processor:
             if args.coupled != "none":
                 self.pe1 = args.coupled[::2]
                 self.pe2 = args.coupled[1::2]
+                if len(self.pe1) != len(self.pe2):
+                    logging.error(f"Number of forward reads != Number of reverse reads. Current forward: {len(self.pe1)} reverse: {len(self.pe2)}")
+                    sys.exit(-1)
             else:
                 self.pe2 = args.pe2
                 if args.interleaved == "none":
@@ -140,7 +155,12 @@ class Processor:
             self.pe2 = 'none'
 
         try:
-            self.mag_directory = os.path.abspath(args.directory) if args.directory != 'none' else 'none'
+            self.kmer_sizes = args.kmer_sizes
+        except AttributeError:
+            self.kmer_sizes = ['auto']
+
+        try:
+            self.mag_directory = os.path.abspath(args.directory) if args.directory is not None else 'none'
         except AttributeError:
             self.mag_directory = 'none'
 
@@ -217,10 +237,14 @@ class Processor:
             self.pe2 = [os.path.abspath(p) for p in self.pe2]
         if self.longreads != "none":
             self.longreads = [os.path.abspath(p) for p in self.longreads]
+        if self.gsa_mappings != "none":
+            self.gsa_mappings = os.path.abspath(self.gsa_mappings)
 
         conf["fasta"] = self.assembly
         conf["reference_filter"] = self.reference_filter
         conf["gsa"] = self.gold_standard
+        conf["gsa_mappings"] = self.gsa_mappings
+        conf["semibin_model"] = self.semibin_model
         conf["max_threads"] = int(self.threads)
         conf["pplacer_threads"] = int(self.pplacer_threads)
         conf["max_memory"] = int(self.max_memory)
@@ -228,6 +252,7 @@ class Processor:
         conf["short_reads_2"] = self.pe2
         conf["long_reads"] = self.longreads
         conf["long_read_type"] = self.longread_type
+        conf["kmer_sizes"] = self.kmer_sizes
         conf["min_contig_size"] = int(self.min_contig_size)
         conf["min_bin_size"] = int(self.min_bin_size)
         conf["gtdbtk_folder"] = self.gtdbtk
@@ -254,7 +279,7 @@ class Processor:
     def _validate_config(self):
         load_configfile(self.config)
 
-    def run_workflow(self, workflow="recover_mags", cores=16, profile=None,
+    def run_workflow(self, workflows=["recover_mags"], cores=16, profile=None,
                      dryrun=False, clean=True, conda_frontend="mamba",
                      snakemake_args=""):
         """
@@ -272,30 +297,31 @@ class Processor:
 
         cores = max(int(self.threads), cores)
 
-        cmd = (
-            "snakemake --snakefile {snakefile} --directory {working_dir} "
-            "{jobs}--rerun-incomplete "
-            "--configfile '{config_file}' --nolock"
-            " {profile} {conda_frontend} --use-conda {conda_prefix}"
-            " {dryrun}{notemp}{args}"
-            " {target_rule}"
-        ).format(
-            snakefile=get_snakefile(),
-            working_dir=self.output,
-            jobs="--jobs {} ".format(cores) if cores is not None else "",
-            config_file=self.config,
-            profile="" if (profile is None) else "--profile {}".format(profile),
-            dryrun="--dryrun " if dryrun else "",
-            notemp="--notemp " if not clean else "",
-            args=snakemake_args,
-            target_rule=workflow if workflow != "None" else "",
-            conda_prefix="--conda-prefix " + self.conda_prefix,
-            conda_frontend="--conda-frontend " + conda_frontend
-        )
-        logging.info("Executing: %s" % cmd)
-        try:
-            subprocess.check_call(cmd, shell=True)
-        except subprocess.CalledProcessError as e:
-            # removes the traceback
-            logging.critical(e)
-            exit(1)
+        for workflow in workflows:
+            cmd = (
+                "snakemake --snakefile {snakefile} --directory {working_dir} "
+                "{jobs}--rerun-incomplete "
+                "--configfile '{config_file}' --nolock"
+                " {profile} {conda_frontend} --use-conda {conda_prefix}"
+                " {dryrun}{notemp}{args}"
+                " {target_rule}"
+            ).format(
+                snakefile=get_snakefile(),
+                working_dir=self.output,
+                jobs="--jobs {} ".format(cores) if cores is not None else "",
+                config_file=self.config,
+                profile="" if (profile is None) else "--profile {}".format(profile),
+                dryrun="--dryrun " if dryrun else "",
+                notemp="--notemp " if not clean else "",
+                args=snakemake_args,
+                target_rule=workflow if workflow != "None" else "",
+                conda_prefix="--conda-prefix " + self.conda_prefix,
+                conda_frontend="--conda-frontend " + conda_frontend
+            )
+            logging.info("Executing: %s" % cmd)
+            try:
+                subprocess.check_call(cmd, shell=True)
+            except subprocess.CalledProcessError as e:
+                # removes the traceback
+                logging.critical(e)
+                exit(1)

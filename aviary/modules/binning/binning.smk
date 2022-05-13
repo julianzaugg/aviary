@@ -47,7 +47,7 @@ rule prepare_binning_files:
     group: 'binning'
     output:
         maxbin_coverage = "data/maxbin.cov.list",
-        metabat_coverage = "data/coverm.cov",
+        metabat_coverage = "data/coverm.cov"
     conda:
         "../../envs/coverm.yaml"
     threads:
@@ -115,7 +115,6 @@ rule concoct_binning:
         "merge_cutup_clustering.py data/concoct_working/clustering_gt{params.min_contig_size}.csv > data/concoct_working/clustering_merged.csv && "
         "mkdir -p data/concoct_bins && "
         "extract_fasta_bins.py {input.fasta} data/concoct_working/clustering_merged.csv --output_path data/concoct_bins/ && "
-        "rm -rf data/binning_bams/ && "
         "touch {output[0]} || touch {output[0]}"
 
 
@@ -148,11 +147,12 @@ rule vamb_binning:
     will be no bins produced by it but all other files will be there
     """
     input:
-        coverage = "data/coverm.cov",
+        coverage = "data/coverm.filt.cov",
         fasta = config["fasta"],
     params:
         min_bin_size = config["min_bin_size"],
-        min_contig_size = config["min_contig_size"]
+        min_contig_size = config["min_contig_size"],
+        vamb_threads = int(config["max_threads"]) // 2 # vamb use double the threads you give it
     group: 'binning'
     output:
         "data/vamb_bins/done"
@@ -164,7 +164,7 @@ rule vamb_binning:
          config["max_threads"]
     shell:
         "rm -rf data/vamb_bins/; "
-        "bash -c 'vamb --outdir data/vamb_bins/ -p {threads} --jgi {input.coverage} --fasta {input.fasta} "
+        "bash -c 'vamb --outdir data/vamb_bins/ -p {params.vamb_threads} --jgi {input.coverage} --fasta {input.fasta} "
         "--minfasta {params.min_bin_size} -m {params.min_contig_size} && touch {output[0]}' || "
         "touch {output[0]} && mkdir -p data/vamb_bins/bins"
 
@@ -309,6 +309,24 @@ rule rosella:
         "--min-contig-size {params.min_contig_size} --min-bin-size {params.min_bin_size} --n-neighbors 200 && "
         "touch {output.done} || touch {output.done}"
 
+
+rule semibin:
+    input:
+        fasta = config["fasta"],
+        bams_indexed = "data/binning_bams/done"
+    group: 'binning'
+    params:
+        semibin_model = config["semibin_model"]
+    output:
+        done = "data/semibin_bins/done"
+    threads:
+        config["max_threads"]
+    conda:
+        "envs/semibin.yaml"
+    shell:
+        "SemiBin single_easy_bin -i {input.fasta} -b data/binning_bams/*.bam -o data/semibin_bins -p {threads} && "
+        "touch {output.done} || touch {output.done}"
+
 rule checkm_rosella:
     input:
         done = "data/rosella_bins/done"
@@ -325,7 +343,8 @@ rule checkm_rosella:
         config["max_threads"]
     shell:
         'checkm lineage_wf -t {threads} --pplacer_threads {params.pplacer_threads} '
-        '-x {params.extension} {params.bin_folder} {params.bin_folder}/checkm --tab_table -f {output.output_file}'
+        '-x {params.extension} {params.bin_folder} {params.bin_folder}/checkm --tab_table -f {output.output_file} '
+        '|| touch {output.output_file}'
 
 rule checkm_metabat2:
     input:
@@ -343,7 +362,27 @@ rule checkm_metabat2:
         config["max_threads"]
     shell:
         'checkm lineage_wf -t {threads} --pplacer_threads {params.pplacer_threads} '
-        '-x {params.extension} {params.bin_folder} {params.bin_folder}/checkm --tab_table -f {output.output_file}'
+        '-x {params.extension} {params.bin_folder} {params.bin_folder}/checkm --tab_table -f {output.output_file} '
+        '|| touch {output.output_file}'
+
+rule checkm_semibin:
+    input:
+        done = "data/semibin_bins/done"
+    params:
+        pplacer_threads = config["pplacer_threads"],
+        bin_folder = "data/semibin_bins/output_recluster_bins/",
+        extension = "fa"
+    group: 'binning'
+    output:
+        output_file = "data/semibin_bins/checkm.out"
+    conda:
+        "../../envs/checkm.yaml"
+    threads:
+        config["max_threads"]
+    shell:
+        'checkm lineage_wf -t {threads} --pplacer_threads {params.pplacer_threads} '
+        '-x {params.extension} {params.bin_folder} {params.bin_folder}/checkm --tab_table -f {output.output_file} '
+        '|| touch {output.output_file}'
 
 rule refine_rosella:
     input:
@@ -361,7 +400,7 @@ rule refine_rosella:
         min_bin_size = config["min_bin_size"],
         max_iterations = 5,
         pplacer_threads = config["pplacer_threads"],
-        max_contamination = 10,
+        max_contamination = 20,
         final_refining = False
     threads:
         config["max_threads"]
@@ -386,7 +425,7 @@ rule refine_metabat2:
         min_bin_size = config["min_bin_size"],
         max_iterations = 5,
         pplacer_threads = config["pplacer_threads"],
-        max_contamination = 10,
+        max_contamination = 20,
         final_refining = False
     threads:
         config["max_threads"]
@@ -548,14 +587,13 @@ rule recover_mags:
         "ln -s ../data/coverm_abundances.tsv ./; "
         "ln -s ../data/coverm.cov ./; "
         "cd ../; "
-        "ln -s data/singlem_out/ diversity/; "
+        "ln -sr data/singlem_out/ diversity; "
         "touch bins/done; "
         "touch diversity/done; "
 
 rule recover_mags_no_singlem:
     input:
         final_bins = "bins/checkm.out",
-        gtdbtk_done= "data/gtdbtk/done",
         coverm = "data/coverm_abundances.tsv",
     conda:
         "../../envs/coverm.yaml"
@@ -565,15 +603,11 @@ rule recover_mags_no_singlem:
     threads:
         config["max_threads"]
     shell:
-        """
-        # Use --precluster-method finch so dashing-related install problems are avoided i.e. https://github.com/dnbaker/dashing/issues/41
-        cd bins
-        ln -s ../data/coverm_abundances.tsv ./
-        ln -s ../data/coverm.cov ./
-        cd ../
-        # cp data/*_bins* bins/
-        touch bins/done
-        """
+        "cd bins/; "
+        "ln -s ../data/coverm_abundances.tsv ./; "
+        "ln -s ../data/coverm.cov ./; "
+        "cd ../; "
+        "touch bins/done; "
 
 # Special rule to help out with a buggy output
 rule dereplicate_and_get_abundances_paired:

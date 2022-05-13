@@ -5,9 +5,16 @@ channels:
   - defaults
 dependencies:
   - pip
-  - flight-genome>=1.4.3
-  - numba==0.55
+  - gcc
+  - cxx-compiler
   - rosella>=0.4.1
-  - pebble
-  - checkm-genome
-  - biopython
+  - checkm-genome==1.1.3
+  - pip:
+      - numpy
+      - numba
+      - pebble
+      - "git+https://github.com/rhysnewell/flight.git#egg=flight-genome"
+      - "git+https://github.com/scikit-learn-contrib/hdbscan.git#egg=hdbscan"
+      - threadpoolctl
+      - scikit-bio==0.5.6
+      - biopython

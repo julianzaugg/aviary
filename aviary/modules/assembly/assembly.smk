@@ -1,12 +1,12 @@
 ruleorder: filter_illumina_assembly > short_only
 # ruleorder: fastqc > fastqc_long
-ruleorder: combine_assemblies > skip_unicycler_with_qc > skip_unicycler > combine_long_only
+ruleorder: skip_unicycler_with_qc > skip_unicycler > combine_assemblies > combine_long_only
 ruleorder: skip_long_assembly > get_high_cov_contigs > short_only
 ruleorder: skip_long_assembly > filter_illumina_assembly
 ruleorder: filter_illumina_ref > no_ref_filter
-ruleorder: combine_assemblies > skip_unicycler_with_qc > skip_unicycler > combine_long_only > spades_assembly_short
-ruleorder: complete_assembly_with_qc > complete_assembly > skip_unicycler_with_qc > skip_unicycler
-ruleorder: combine_assemblies > skip_unicycler_with_qc > skip_unicycler > move_spades_assembly
+ruleorder: skip_unicycler_with_qc > skip_unicycler > combine_assemblies > combine_long_only > spades_assembly_short
+ruleorder: skip_unicycler_with_qc > skip_unicycler > complete_assembly_with_qc > complete_assembly
+ruleorder: skip_unicycler_with_qc > skip_unicycler > combine_assemblies > move_spades_assembly
 
 # onsuccess:
 #     print("Assembly finished, no error")
@@ -246,10 +246,10 @@ rule get_high_cov_contigs:
     params:
         min_cov_long = 20.0,
         min_cov_short = 3.0,
-        exclude_contig_cov = 1000,
-        exclude_contig_size = 10000,
+        exclude_contig_cov = 100,
+        exclude_contig_size = 25000,
         short_contig_size = 200000,
-        long_contig_size = 500000
+        long_contig_size = 250000
     run:
         ill_cov_dict = {}
         # populate illumina coverage dictionary using PAF
@@ -296,11 +296,12 @@ rule get_high_cov_contigs:
                 # if a contig is covered by >= min_cov_long long reads place in high cov set
                 # Also place in high coverage set if contig was not covered by illumina reads
                 # Also place in high coverage set if illumina coverage was <= min_cov_short
-                if ((float(long_coverage) >= params.min_cov_long) \
-                    and not (float(long_coverage) <= params.exclude_contig_cov
-                             and int(contig_length) <= params.exclude_contig_size)) or not contig_name in ill_cov_dict \
-                        or ill_cov_dict[contig_name] <= params.min_cov_short:
-                    high_cov_set.add(contig_name)
+                if int(contig_length) >= params.exclude_contig_size:
+                    if ((float(long_coverage) >= params.min_cov_long)
+                        and not (float(long_coverage) <= params.exclude_contig_cov
+                                 and int(contig_length) <= params.exclude_contig_size)) or not contig_name in ill_cov_dict \
+                            or ill_cov_dict[contig_name] <= params.min_cov_short:
+                        high_cov_set.add(contig_name)
 
         filtered_contigs = set()
         # Populate filtered contigs with short contigs that were connected to two edges in short_edges dict in the correct
@@ -400,7 +401,8 @@ rule spades_assembly:
         config["max_threads"]
     params:
         max_memory = config["max_memory"],
-        long_read_type = config["long_read_type"]
+        long_read_type = config["long_read_type"],
+        kmer_sizes = " ".join(config["kmer_sizes"])
     conda:
         "envs/spades.yaml"
     benchmark:
@@ -410,23 +412,26 @@ rule spades_assembly:
         rm -rf data/spades_assembly/tmp; 
         minimumsize=500000;
         actualsize=$(stat -c%s data/short_reads.filt.fastq.gz);
-        if [ $actualsize -ge $minimumsize ]
+        if [ -d "data/spades_assembly/" ]
+        then
+            spades.py --restart-from last --memory {params.max_memory} -t {threads} -o data/spades_assembly -k {params.kmer_sizes} && \
+            ln data/spades_assembly/scaffolds.fasta data/spades_assembly.fasta
+        elif [ $actualsize -ge $minimumsize ]
         then
             if [ {params.long_read_type} = "ont" ] || [ {params.long_read_type} = "ont_hq" ]
             then
-                spades.py --memory {params.max_memory} --meta --nanopore {input.long_reads} --12 {input.fastq} \
-                -o data/spades_assembly -t {threads} 2>data/spades.err && \
+                spades.py --checkpoints all --memory {params.max_memory} --meta --nanopore {input.long_reads} --12 {input.fastq} \
+                -o data/spades_assembly -t {threads}  -k {params.kmer_sizes} 2>data/spades.err && \
                 ln data/spades_assembly/scaffolds.fasta data/spades_assembly.fasta
             else
-                spades.py --memory {params.max_memory} --meta --pacbio {input.long_reads} --12 {input.fastq} \
-                -o data/spades_assembly -t {threads} 2>data/spades.err && \
+                spades.py --checkpoints all --memory {params.max_memory} --meta --pacbio {input.long_reads} --12 {input.fastq} \
+                -o data/spades_assembly -t {threads}  -k {params.kmer_sizes} 2>data/spades.err && \
                 ln data/spades_assembly/scaffolds.fasta data/spades_assembly.fasta
             fi
         else
             touch {output.fasta}
         fi 
         """
-
 
 
 # Perform shrot read assembly only with no other steps
@@ -440,6 +445,7 @@ rule spades_assembly_short:
          config["max_threads"]
     params:
          max_memory = config["max_memory"],
+         kmer_sizes = config["kmer_sizes"],
          final_assembly = True
     conda:
         "envs/spades.yaml"
@@ -686,3 +692,27 @@ rule complete_assembly_with_qc:
         'cd assembly; '
         'ln -s ../data/final_contigs.fasta ./; '
 
+rule reset_to_spades_assembly:
+    output:
+         temp('data/reset_spades')
+    shell:
+         'rm -rf data/spades*; '
+         'rm -rf assembly/; '
+         'rm -rf data/final_contigs.fasta; '
+         'rm -rf data/flye_high_cov.fasta; '
+         'rm -rf data/list_of*; '
+         'rm -rf data/binned_reads; '
+         'rm -rf data/final_assemblies; '
+         'rm -rf data/sr_vs*; '
+         'rm -rf data/unicycler*; '
+         'rm -rf data/metabat_bins; '
+         'rm -rf data/cached_bams; '
+         'touch data/reset_spades'
+
+rule remove_final_contigs:
+    output:
+          temp('data/rewind_time')
+    shell:
+         'rm -rf assembly/; '
+         'rm -rf data/final_contigs.fasta; '
+         'touch data/rewind_time; '

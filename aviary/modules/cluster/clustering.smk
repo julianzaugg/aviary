@@ -53,7 +53,7 @@ rule generate_genome_list:
     shell:
         "for f in {params.previous_runs}; "
         "do "
-        "  find $f/bins/final_bins/*.fa; "
+        "  find $f/bins/final_bins/*.fna; "
         "done >> data/genome_paths.txt"
 
 
@@ -77,7 +77,7 @@ rule run_galah:
         "galah cluster -t {threads} --checkm-tab-table {input.checkm} " 
         "--genome-fasta-list {input.genome_list} --output-cluster-definition {output.dereplicated_set} "
         "--ani {params.derep_ani} --precluster-ani {params.precluster_ani} --precluster-method {params.precluster_method} "
-        "--min-completeness {params.min_completeness} --max-contamination {params.min_contamination} "
+        "--min-completeness {params.min_completeness} --max-contamination {params.max_contamination} "
         "--output-representative-fasta-directory representative_genomes/ "
 
 rule representative_checkm:
@@ -112,14 +112,14 @@ rule complete_cluster:
 
         for run in previous_runs:
             try:
-                df_bac = pd.read_csv(os.path.abspath(run) + "/taxonomy/gtdbtk/gtdbtk.bac120.summary.tsv", sep="\t")
+                df_bac = pd.read_csv(os.path.abspath(run) + "/data/gtdbtk/gtdbtk.bac120.summary.tsv", sep="\t")
                 df_bac['user_genome'] = df_bac['user_genome'].apply(lambda bin: os.path.abspath(run) + "/bins/final_bins/" + str(bin))
                 runs_bac.append(df_bac)
             except FileNotFoundError:
                 pass
 
             try:
-                df_arc = pd.read_csv(os.path.abspath(run) + "/taxonomy/gtdbtk/gtdbtk.ar122.summary.tsv", sep="\t")
+                df_arc = pd.read_csv(os.path.abspath(run) + "/data/gtdbtk/gtdbtk.ar122.summary.tsv", sep="\t")
                 df_arc['user_genome'] = df_arc['user_genome'].apply(lambda bin: os.path.abspath(run) + "/bins/final_bins/" + str(bin))
                 runs_arc.append(df_arc)
             except FileNotFoundError:

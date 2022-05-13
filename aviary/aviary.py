@@ -232,6 +232,14 @@ def main():
         '-g', '--gold-standard-assembly', '--gold_standard_assembly',
         help='Gold standard assembly to compare either the Aviary assembly or a given input assembly against',
         dest="gold_standard",
+        default=['none'],
+        nargs='*'
+    )
+
+    qc_group.add_argument(
+        '--gsa-mappings', '--gsa_mappings',
+        help='CAMI I & II GSA mappings',
+        dest="gsa_mappings",
         default='none'
     )
 
@@ -273,9 +281,11 @@ def main():
 
     read_group_exclusive.add_argument(
         '-1', '--pe-1', '--paired-reads-1', '--paired_reads_1', '--pe1',
-        help='A space separated list of forwards read files to use for the binning process'
-             'NOTE: If performing assembly and multiple files are provided then only '
-             'the first file will be used for assembly.',
+        help='A space separated list of forwards read files'
+             'NOTE: If performing assembly and multiple files and longreads '
+             '      are provided then only the first file will be used for assembly.'
+             '      If no longreads are provided then all samples will be co-assembled '
+             '      with megahit',
         dest='pe1',
         nargs='*',
         default="none"
@@ -283,9 +293,11 @@ def main():
 
     short_read_group.add_argument(
         '-2', '--pe-2', '--paired-reads-2', '--paired_reads_2', '--pe2',
-        help='A space separated list of forwards read files to use for the binning process'
-             'NOTE: If performing assembly and multiple files are provided then only '
-             'the first file will be used for assembly.',
+        help='A space separated list of reverse read files'
+             'NOTE: If performing assembly and multiple files and longreads '
+             '      are provided then only the first file will be used for assembly.'
+             '      If no longreads are provided then all samples will be co-assembled '
+             '      with megahit',
         dest='pe2',
         nargs='*',
         default="none"
@@ -293,9 +305,11 @@ def main():
 
     read_group_exclusive.add_argument(
         '-i','--interleaved',
-        help='A space separated list of interleaved read files for the binning process '
-             'NOTE: If performing assembly and multiple files are provided then only '
-             'the first file will be used for assembly.',
+        help='A space separated list of interleaved read files '
+             'NOTE: If performing assembly and multiple files and longreads '
+             '      are provided then only the first file will be used for assembly.'
+             '      If no longreads are provided then all samples will be co-assembled '
+             '      with megahit',
         dest='interleaved',
         nargs='*',
         default="none"
@@ -304,8 +318,10 @@ def main():
     read_group_exclusive.add_argument(
         '-c', '--coupled',
         help='Forward and reverse read files in a coupled space separated list. '
-             'NOTE: If performing assembly and multiple files are provided then only '
-             'the first two files will be used for assembly.',
+             'NOTE: If performing assembly and multiple files and longreads '
+             '      are provided then only the first file will be used for assembly.'
+             '      If no longreads are provided then all samples will be co-assembled '
+             '      with megahit',
         dest='coupled',
         nargs='*',
         default="none"
@@ -317,8 +333,9 @@ def main():
                                               add_help=False)
     long_read_group.add_argument(
         '-l', '--longreads', '--long-reads', '--long_reads',
-        help='A space separated list of interleaved read files for the binning process. NOTE: If performing assembly and '
-             'multiple long read files are provided, then only the first file is used for assembly. ',
+        help='A space separated list of long-read read files. '
+             'NOTE: If performing assembly and multiple long read files are provided, then only the first file is used for assembly. '
+             '      This behaviour might change in future.',
         dest='longreads',
         nargs='*',
         default="none"
@@ -377,6 +394,14 @@ def main():
         help='Minimum bin size in base pairs for a MAG',
         dest='min_bin_size',
         default=200000
+    )
+
+    binning_group.add_argument(
+        '--semibin-model', '--semibin_model',
+        help='The environment model to passed to SemiBin. Can be one of: '
+             'human_gut, dog_gut, ocean, soil, cat_gut, human_oral, mouse_gut, pig_gut, built_environment, wastewater, global',
+        dest='semibin_model',
+        default='global'
     )
 
     ####################################################################
@@ -518,7 +543,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='cluster_samples',
+        nargs="+",
+        default=['cluster_samples'],
     )
 
     ##########################  ~ ASSEMBLE ~  ###########################
@@ -536,20 +562,30 @@ def main():
         ''')
 
     assemble_options.add_argument(
-        '--skip-unicycler', '--skip_unicycler',
-        help='Skip the Unicycler reassembly of bins procedure.',
+        '--use-unicycler', '--use_unicycler',
+        help='Use Unicycler to re-assemble the metaSPAdes hybrid assembly. Not recommended for complex metagenomes.',
         type=str2bool,
         nargs='?',
         const=True,
-        dest='skip_unicycler',
+        dest='use_unicycler',
         default=False,
+    )
+
+    assemble_options.add_argument(
+        '--kmer-sizes', '--kmer_sizes', '-k',
+        help='Manually specify the kmer-sizes used by SPAdes during assembly. Space separated odd integer values '
+             'and less than 128 or "auto"',
+        dest='kmer_sizes',
+        default=['auto'],
+        nargs="+",
     )
 
     assemble_options.add_argument(
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='complete_assembly',
+        nargs="+",
+        default=['complete_assembly'],
     )
 
     ##########################  ~ RECOVER ~   ###########################
@@ -578,7 +614,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='recover_mags',
+        nargs="+",
+        default=['recover_mags'],
     )
 
     recover_options.add_argument(
@@ -591,9 +628,9 @@ def main():
     ##########################  ~ ANNOTATE ~   ###########################
 
     annotate_options = subparsers.add_parser('annotate',
-                                              description='The complete binning pipeline',
+                                              description='Annotate a given set of MAGs using EggNog',
                                               formatter_class=CustomHelpFormatter,
-                                              parents=[mag_group, annotation_group, base_group],
+                                              parents=[mag_group, annotation_group, base_group, qc_group],
                                               epilog=
                                             '''
                                                   ......:::::: ANNOTATE ::::::......
@@ -603,10 +640,19 @@ def main():
                                             ''')
 
     annotate_options.add_argument(
+        '-a', '--assembly',
+        help='FASTA file containing scaffolded contigs of one or more metagenome assemblies wishing to be passed to QUAST',
+        dest="assembly",
+        nargs="*",
+        required=False,
+    )
+
+    annotate_options.add_argument(
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='complete_annotation',
+        nargs="+",
+        default=['complete_annotation'],
     )
 
     ##########################  ~ GENOTYPE ~   ###########################
@@ -627,7 +673,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='create_webpage_genotype',
+        nargs="+",
+        default=['create_webpage_genotype'],
     )
 
     ##########################  ~ CLUSTER ~   ###########################
@@ -650,7 +697,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='complete_cluster',
+        nargs="+",
+        default=['complete_cluster'],
     )
 
     ##########################  ~ VIRAL ~   ###########################
@@ -671,7 +719,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='create_webpage_genotype',
+        nargs="+",
+        default=['create_webpage_genotype'],
     )
 
     ##########################   ~ COMPLETE ~  ###########################
@@ -693,7 +742,8 @@ def main():
         '-w', '--workflow',
         help='Main workflow to run',
         dest='workflow',
-        default='complete_workflow',
+        nargs="+",
+        default=['complete_workflow'],
     )
 
     ##########################  ~ ISOLATE ~  ###########################
@@ -712,9 +762,10 @@ def main():
 
     isolate_options.add_argument(
         '-w', '--workflow',
-        help='Main workflow to run',
+        help='Main workflows to run',
         dest='workflow',
-        default='create_webpage_assemble',
+        nargs="+",
+        default=['create_webpage_assemble'],
     )
 
     ##########################   ~ configure ~  ###########################
@@ -835,12 +886,12 @@ def main():
 
             try:
                 if args.subparser_name == 'assemble':
-                    if args.skip_unicycler:
-                        args.workflow = "skip_unicycler_with_qc"
+                    if args.use_unicycler:
+                        args.workflow.insert(0, "combine_assemblies")
             except AttributeError:
                 pass
 
-            processor.run_workflow(workflow=args.workflow,
+            processor.run_workflow(workflows=args.workflow,
                                    cores=int(args.n_cores),
                                    dryrun=args.dryrun,
                                    clean=args.clean,
