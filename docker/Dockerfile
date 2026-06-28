@@ -48,7 +48,16 @@ ENV GTDBTK_DATA_PATH=/db/gtdb \
 RUN pixi run --frozen aviary --version
 RUN pixi run --frozen aviary --help
 
+# Bake conda env PATH into a static entrypoint — no pixi needed at runtime
+# for the main binary. Aviary's subtool calls (coverm, rosella, etc.) still
+# use pixi internally, so containers need --writable-tmpfs at runtime.
+RUN pixi run --frozen bash -c '\
+    CONDA_BIN=$(dirname $(which aviary)); \
+    printf "#!/bin/bash\nexport PATH=\"%s:\$PATH\"\nexport CONDA_PREFIX=\"%s\"\nexec aviary \"\$@\"\n" \
+      "$CONDA_BIN" "$CONDA_PREFIX" > /entrypoint.sh; \
+    chmod +x /entrypoint.sh'
+
 WORKDIR /data
 
 CMD ["--help"]
-ENTRYPOINT ["/root/.pixi/bin/pixi", "run", "--frozen", "--manifest-path", "/aviary/pixi.toml", "aviary"]
+ENTRYPOINT ["/entrypoint.sh"]
