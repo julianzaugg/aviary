@@ -48,12 +48,7 @@ ENV GTDBTK_DATA_PATH=/db/gtdb \
 RUN pixi run --frozen aviary --version
 RUN pixi run --frozen aviary --help
 
-RUN pixi shell-hook --frozen --no-install --manifest-path /aviary/pixi.toml | grep -v set_env_vars.sh >> /run_via_pixi.profile
-RUN echo 'source /run_via_pixi.profile' > /run_via_pixi.bash
-RUN echo 'exec "$@"' >> /run_via_pixi.bash
-RUN chmod +x /run_via_pixi.bash
-
 WORKDIR /data
 
 CMD ["--help"]
-ENTRYPOINT ["bash", "/run_via_pixi.bash", "aviary"]
+ENTRYPOINT ["/root/.pixi/bin/pixi", "run", "--frozen", "--manifest-path", "/aviary/pixi.toml", "aviary"]
