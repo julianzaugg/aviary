@@ -20,7 +20,13 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://pixi.sh/install.sh | bash
 
 # Add Pixi to PATH
-ENV PATH="/root/.pixi/bin:${PATH}"
+# /root/.pixi/bin: pixi itself
+# /aviary/aviary/.pixi/envs/default/bin: aviary binary (pixi.toml resolves via
+# symlink so the project root is /aviary/aviary/, not /aviary/)
+# Both must be in PATH so 'apptainer exec' (used by Nextflow) finds aviary
+# without going through the ENTRYPOINT.
+ENV PATH="/aviary/aviary/.pixi/envs/default/bin:/root/.pixi/bin:${PATH}" \
+    CONDA_PREFIX="/aviary/aviary/.pixi/envs/default"
 ENV PYTHONNOUSERSITE=1
 
 # re-add the first line when setup here - the second line enables running from arbitrary commits rather than a tag
