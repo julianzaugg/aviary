@@ -25,8 +25,8 @@ RUN curl -fsSL https://pixi.sh/install.sh | bash
 # symlink so the project root is /aviary/aviary/, not /aviary/)
 # Both must be in PATH so 'apptainer exec' (used by Nextflow) finds aviary
 # without going through the ENTRYPOINT.
-ENV PATH="/aviary/aviary/.pixi/envs/default/bin:/root/.pixi/bin:${PATH}" \
-    CONDA_PREFIX="/aviary/aviary/.pixi/envs/default"
+ENV PATH="/aviary/.pixi/envs/default/bin:/root/.pixi/bin:${PATH}" \
+    CONDA_PREFIX="/aviary/.pixi/envs/default"
 ENV PYTHONNOUSERSITE=1
 
 # re-add the first line when setup here - the second line enables running from arbitrary commits rather than a tag
