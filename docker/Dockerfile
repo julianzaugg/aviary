@@ -30,13 +30,15 @@ ENV PATH="/aviary/.pixi/envs/default/bin:/root/.pixi/bin:${PATH}" \
 ENV PYTHONNOUSERSITE=1
 
 # re-add the first line when setup here - the second line enables running from arbitrary commits rather than a tag
-RUN git clone https://github.com/rhysnewell/aviary . && git checkout v0.13.0
+RUN git clone https://github.com/rhysnewell/aviary . && git checkout v0.13.3
 RUN rm -rf .pixi
-# RUN git clone https://github.com/rhysnewell/aviary . && git checkout 0.13.0
+# RUN git clone https://github.com/rhysnewell/aviary . && git checkout 0.13.3
 
 # We install through pip, because installing via pip install -e . causes issues for apptainer
 # https://github.com/prefix-dev/pixi/issues/1387
-RUN pixi run --frozen bash -c 'pip install aviary-genome==0.13.0'
+# bird-tool-utils is installed explicitly because it is a missing pip dependency
+# of aviary-genome (matches upstream docker/Dockerfile.in)
+RUN pixi run --frozen bash -c 'pip install aviary-genome==0.13.3 bird-tool-utils'
 
 # Build all non-GPU pixi environments. Aviary workflows invoke these at runtime.
 RUN pixi run --frozen aviary build
