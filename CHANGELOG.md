@@ -1,5 +1,98 @@
 # Changelog
 
+## v0.13.3 - 2026-09-01
+
+### Added
+
+- **`--semibin-mode`** — `single` (default, unchanged) or `multi` to co-bin
+  several assemblies together (pass multiple `--assembly` files). Multi mode
+  ignores `--semibin-model`.
+
+- **`--short-read-mapper`** — `strobealign` (default), `minimap2`, `rammap`,
+  `minibwa`, `bwa-mem`, `bwa-mem2`, or `strobealign-aemb` (fast direct
+  abundance estimate; coverage-only, no polishing/model support).
+
+- **`--long-read-mapper`** — `rammap` (default), `minimap2`, or `minibwa`
+  (not used for polishing).
+
+- **`--short-read-mapper-model` / `--long-read-mapper-model`** — explicit
+  CoverM preset for mappers that support more than one (`minimap2`, `rammap`).
+
+- **`--minibwa-params`**, **`--bwa-params`**, **`--strobealign-params`**,
+  **`--minimap2-params`**, **`--rammap-params`** — raw passthrough parameters
+  for the matching aligner.
+
+### Changed
+
+- **`ont_hq` and `hifi` now use their own CoverM presets** (`lr-hq`/`hifi`)
+  instead of being lumped with `ont`/`ccs` — shifts coverage/abundance
+  numbers slightly for those two read types. Override with
+  `--long-read-mapper-model` to reproduce old behaviour.
+
+- **Default aligners are now strobealign (short) and rammap (long)**,
+  matching CoverM 0.8's own default.
+
+- **Bin abundances now use the same mapper as the binners** (previously
+  hardcoded to `minimap2-sr`, causing a mismatch with binner-side coverage).
+
+- **Bird_tool_utils_python updated to v0.7.0**
+
+### Fixed
+
+- **GPU rules now schedule correctly on both SLURM and PBS** — `taxvamb`,
+  `semibin`, `comebin`, `polish_metagenome_flye` were missing SLURM's `gpu`
+  resource key (only `gpus`, which PBS reads), so SLURM silently ran them on
+  CPU nodes.
+
+- **concoct now runs** — a numpy/scipy version mismatch was crashing its
+  own version check at startup.
+
+- **`assembly_quality` can be built again** — two rules produced the same
+  output file, blocking the whole DAG.
+
+- **`read_fraction_recovered` now completes** and produces real output.
+
+
+---
+
+## v0.13.2 - 2026-07-22
+
+Patch release fixing a crash in Metabuli taxonomy conversion.
+
+---
+
+### Fixed
+
+- **`convert_metabuli` crashed on unclassified reads** — Metabuli writes
+  unclassified rows (`is_classified=0`) with a trailing tab, giving 9
+  tab-separated fields against classified rows' 8, so `pd.read_csv(header=None)`
+  inferred 8 columns from the leading classified rows and aborted on the first
+  unclassified one (`ParserError: Expected 8 fields, saw 9`). The read now pins
+  `usecols=range(8)`, absorbing the phantom field without discarding data. Any
+  run with at least one unclassified read was affected.
+
+
+---
+
+## v0.13.1 - 2026-07-08
+
+Patch release focused on repairing database downloads (`aviary configure --download`).
+
+---
+
+### Fixed
+
+- **`aviary configure --download` no longer requires read inputs** — `download_databases` added to `SUBCOMMANDS_WITHOUT_READS`; previously failed with "both long_reads and short_reads_1 are set to none"
+- **eggNOG database download** — `eggnogdb.embl.de` was decommissioned; files are now fetched from `eggnog5.embl.de`
+- **Metabuli GTDB database download** — upstream relocated the tarball to an `archive/` path. The old command 404'd but exited 0, silently leaving an empty database; it now downloads the archived index directly and fails loudly on error
+- **CheckM2 database download** — unsets `CHECKM2DB` and runs under `bash -e -o pipefail` so download failures are no longer swallowed
+
+### Changed
+
+- **pixi 0.71+ compatibility** — `pixi.toml` migrated to rich platforms (CUDA on platform entries); minimum `pixi` bumped to `>=0.71`; lockfile regenerated
+
+---
+
 ## v0.13.0 - 2026-03-31
 
 Forked from [wwood/aviary](https://github.com/wwood/aviary) at v0.12.0 (`myloasm` branch). All changes below are relative to that base.
