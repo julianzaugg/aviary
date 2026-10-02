@@ -1,5 +1,5 @@
 # Use a lightweight base image
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # This dockerfile uses cached mounts, so to build use e.g.
 # $ DOCKER_BUILDKIT=1 docker build .
